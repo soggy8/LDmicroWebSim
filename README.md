@@ -30,7 +30,7 @@ A web-based PLC ladder logic simulator that interprets [LDmicro](http://cq.cx/la
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/LDmicroWebSim.git
+git clone https://github.com/soggy8/LDmicroWebSim.git
 cd LDmicroWebSim
 
 # Start with Docker Compose
@@ -44,7 +44,7 @@ open http://localhost:8000
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/LDmicroWebSim.git
+git clone https://github.com/soggy8/LDmicroWebSim.git
 cd LDmicroWebSim
 
 # Create virtual environment
