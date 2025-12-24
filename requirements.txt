@@ -1,0 +1,13 @@
+# LDmicro Web Simulator - Python Dependencies
+
+# Web Framework
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+
+# CORS support
+aiofiles==23.2.1
+
+# Development
+pytest==7.4.3
+

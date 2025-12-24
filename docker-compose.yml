@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  ldmicro-sim:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ldmicro-web-simulator
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source for development (hot-reload)
+      - ./interpreter:/app/interpreter:ro
+      - ./static:/app/static:ro
+      - ./server.py:/app/server.py:ro
+      - ./board_config.py:/app/board_config.py:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Optional: Production configuration
+# Uncomment for production deployment
+# 
+# networks:
+#   default:
+#     name: ldmicro-network
+#
+# To run in production mode without volume mounts:
+# docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+

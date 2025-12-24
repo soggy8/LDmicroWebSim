@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LDmicro Web Simulator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">⚡</div>
+                <div class="logo-text">
+                    <span class="logo-main">LDmicro</span>
+                    <span class="logo-sub">Web Simulator</span>
+                </div>
+            </div>
+            <div class="header-status">
+                <div class="status-indicator" id="statusIndicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Ready</span>
+                </div>
+                <div class="cycle-counter">
+                    Cycle: <span id="cycleCount">0</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Left Panel - Code Editor -->
+            <section class="panel code-panel">
+                <div class="panel-header">
+                    <h2>Ladder Logic (C Code)</h2>
+                    <div class="panel-actions">
+                        <button class="btn btn-small" id="loadExampleBtn">Load Example</button>
+                        <label class="btn btn-small btn-file">
+                            Upload
+                            <input type="file" id="fileInput" accept=".c,.txt,.ld" hidden>
+                        </label>
+                    </div>
+                </div>
+                <div class="code-editor-wrapper">
+                    <textarea id="codeEditor" spellcheck="false" placeholder="Paste LDmicro export here (C code OR ladder text)
+
+SUPPORTED FORMATS:
+1. C code export (File > Compile As > C Code)
+2. Ladder text export (File > Export As > Text)
+
+BOARD I/O NAMES:
+INPUTS:  FOTO, SEN, MOV, TRIG, PO1, PO2, S1-S3, BTN1-BTN3
+OUTPUTS: FAN1-FAN3, H1-H3, PANIC, BELL
+
+Example ladder text:
+   ||       XS1              XS2              YH1       ||
+ 1 ||-------] [--------------]/[--------------( )-------||
+
+Example C code:
+void PlcCycle(void) {
+    if (BTN1) { H1 = 1; }
+}"></textarea>
+                    <div class="line-numbers" id="lineNumbers"></div>
+                </div>
+                <div class="panel-footer">
+                    <button class="btn btn-primary" id="compileBtn">
+                        <span class="btn-icon">⚙</span>
+                        Compile
+                    </button>
+                    <div class="compile-status" id="compileStatus"></div>
+                </div>
+            </section>
+
+            <!-- Right Panel - Virtual Board -->
+            <section class="panel board-panel">
+                <div class="panel-header">
+                    <h2>PLC Training Board</h2>
+                    <div class="panel-actions">
+                        <div class="speed-control">
+                            <label>Speed:</label>
+                            <input type="range" id="speedSlider" min="1" max="100" value="50">
+                            <span id="speedValue">50ms</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Physical Control Board -->
+                <div class="control-board physical-board">
+                    <!-- Board Title -->
+                    <div class="board-title">
+                        <span class="title-main">ПРОГРАМАБИЛЕН ЛОГИЧКИ УПРАВУВАЧ</span>
+                    </div>
+
+                    <!-- ROW 1: FOTO, SEN, MOV, FAN1, FAN2, FAN3 -->
+                    <div class="board-row">
+                        <div class="input-component">
+                            <div class="sensor-box light-sensor" data-input="FOTO">
+                                <div class="sensor-icon">☀</div>
+                            </div>
+                            <span class="component-label">FOTO</span>
+                        </div>
+                        <div class="input-component">
+                            <div class="sensor-box proximity-sensor" data-input="SEN">
+                                <div class="sensor-icon">◎</div>
+                            </div>
+                            <span class="component-label">SEN</span>
+                        </div>
+                        <div class="input-component">
+                            <div class="sensor-box motion-sensor" data-input="MOV">
+                                <div class="sensor-icon">👁</div>
+                            </div>
+                            <span class="component-label">MOV</span>
+                        </div>
+                        <div class="fan-component" data-output="FAN1">
+                            <div class="fan-housing">
+                                <div class="fan-blade">✦</div>
+                            </div>
+                            <span class="component-label">FAN1</span>
+                        </div>
+                        <div class="fan-component" data-output="FAN2">
+                            <div class="fan-housing">
+                                <div class="fan-blade">✦</div>
+                            </div>
+                            <span class="component-label">FAN2</span>
+                        </div>
+                        <div class="fan-component" data-output="FAN3">
+                            <div class="fan-housing">
+                                <div class="fan-blade">✦</div>
+                            </div>
+                            <span class="component-label">FAN3</span>
+                        </div>
+                    </div>
+
+                    <!-- ROW 2: TRIG, PO1, PO2, H1, H2, H3 -->
+                    <div class="board-row">
+                        <div class="input-component">
+                            <div class="sensor-box trigger-sensor" data-input="TRIG">
+                                <div class="sensor-icon">🚪</div>
+                            </div>
+                            <span class="component-label">TRIG</span>
+                        </div>
+                        <div class="input-component">
+                            <div class="sensor-box metal-sensor" data-input="PO1">
+                                <div class="sensor-icon">⬤</div>
+                            </div>
+                            <span class="component-label">PO1</span>
+                        </div>
+                        <div class="input-component">
+                            <div class="sensor-box metal-sensor" data-input="PO2">
+                                <div class="sensor-icon">⬤</div>
+                            </div>
+                            <span class="component-label">PO2</span>
+                        </div>
+                        <div class="indicator-light green" data-output="H1">
+                            <div class="light-lens"></div>
+                            <span class="component-label">H1</span>
+                        </div>
+                        <div class="indicator-light yellow" data-output="H2">
+                            <div class="light-lens"></div>
+                            <span class="component-label">H2</span>
+                        </div>
+                        <div class="indicator-light red" data-output="H3">
+                            <div class="light-lens"></div>
+                            <span class="component-label">H3</span>
+                        </div>
+                    </div>
+
+                    <!-- ROW 3: S1, S2, S3, PLACEHOLDER, PANIC, BELL -->
+                    <div class="board-row">
+                        <div class="input-component">
+                            <label class="light-switch" data-input="S1">
+                                <input type="checkbox">
+                                <span class="switch-plate">
+                                    <span class="switch-toggle"></span>
+                                </span>
+                            </label>
+                            <span class="component-label">S1</span>
+                        </div>
+                        <div class="input-component">
+                            <label class="light-switch" data-input="S2">
+                                <input type="checkbox">
+                                <span class="switch-plate">
+                                    <span class="switch-toggle"></span>
+                                </span>
+                            </label>
+                            <span class="component-label">S2</span>
+                        </div>
+                        <div class="input-component">
+                            <label class="light-switch" data-input="S3">
+                                <input type="checkbox">
+                                <span class="switch-plate">
+                                    <span class="switch-toggle"></span>
+                                </span>
+                            </label>
+                            <span class="component-label">S3</span>
+                        </div>
+                        <div class="output-component">
+                            <div class="placeholder-box">
+                                <span class="placeholder-icon">?</span>
+                            </div>
+                            <span class="component-label">---</span>
+                        </div>
+                        <div class="output-component">
+                            <div class="panic-light" data-output="PANIC">
+                                <div class="strobe-dome"></div>
+                            </div>
+                            <span class="component-label">PANIC</span>
+                        </div>
+                        <div class="output-component">
+                            <div class="bell-box" data-output="BELL">
+                                <span class="bell-icon">🔔</span>
+                            </div>
+                            <span class="component-label">BELL</span>
+                        </div>
+                    </div>
+
+                    <!-- ROW 4: BTN1, BTN2, BTN3 -->
+                    <div class="board-row buttons-row">
+                        <div class="input-component">
+                            <button class="push-button green" data-input="BTN1">
+                                <span class="btn-symbol">●</span>
+                            </button>
+                            <span class="component-label">BTN1</span>
+                        </div>
+                        <div class="input-component">
+                            <button class="push-button yellow" data-input="BTN2">
+                                <span class="btn-symbol">●</span>
+                            </button>
+                            <span class="component-label">BTN2</span>
+                        </div>
+                        <div class="input-component">
+                            <button class="push-button red" data-input="BTN3">
+                                <span class="btn-symbol">●</span>
+                            </button>
+                            <span class="component-label">BTN3</span>
+                        </div>
+                    </div>
+
+                    <!-- Status Display -->
+                    <div class="board-section status-section">
+                        <div class="status-grid">
+                            <div class="status-block">
+                                <div class="status-title">Timers</div>
+                                <div class="status-values" id="timerStatus">T0: 0 | T1: 0 | T2: 0 | T3: 0</div>
+                            </div>
+                            <div class="status-block">
+                                <div class="status-title">Counters</div>
+                                <div class="status-values" id="counterStatus">C0: 0 | C1: 0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulation Controls -->
+                <div class="sim-controls">
+                    <button class="btn btn-run" id="runBtn" disabled>
+                        <span class="btn-icon">▶</span>
+                        Run
+                    </button>
+                    <button class="btn btn-step" id="stepBtn" disabled>
+                        <span class="btn-icon">⏭</span>
+                        Step
+                    </button>
+                    <button class="btn btn-stop" id="stopBtn" disabled>
+                        <span class="btn-icon">⏹</span>
+                        Stop
+                    </button>
+                    <button class="btn btn-reset" id="resetBtn" disabled>
+                        <span class="btn-icon">↺</span>
+                        Reset
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-info">
+                LDmicro Web Simulator • Use component names: FOTO, SEN, BTN1, H1, FAN1, etc.
+            </div>
+        </footer>
+    </div>
+
+    <script src="/static/simulator.js"></script>
+</body>
+</html>
