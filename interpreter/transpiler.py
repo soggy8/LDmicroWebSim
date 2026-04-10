@@ -67,6 +67,22 @@ BOARD_OUTPUTS = [
 INPUT_NAME_TO_INDEX = {inp["name"]: i for i, inp in enumerate(BOARD_INPUTS)}
 OUTPUT_NAME_TO_INDEX = {out["name"]: i for i, out in enumerate(BOARD_OUTPUTS)}
 
+# Physical board aliases mapped to canonical simulator I/O names
+INPUT_ALIASES = {
+    "FOTO1": "FOTO",
+    "FOTO2": "SEN",
+    "PIR": "MOV",
+    "MAG": "TRIG",
+    "IND1": "PO1",
+    "IND2": "PO2",
+    "START1": "BTN1",
+    "STOP1": "BTN2",
+    "START2": "BTN3",
+}
+OUTPUT_ALIASES = {
+    "BEL": "BELL",
+}
+
 
 # ============================================================================
 # Simulation Model
@@ -448,6 +464,10 @@ class Transpiler:
     
     def map_identifier(self, name: str) -> str:
         """Map C identifiers to JavaScript simulation state."""
+        name = name.upper()
+        name = INPUT_ALIASES.get(name, name)
+        name = OUTPUT_ALIASES.get(name, name)
+
         # Check if it's a named INPUT (START1, STOP1, SW1, etc.)
         if name in INPUT_NAME_TO_INDEX:
             idx = INPUT_NAME_TO_INDEX[name]
@@ -460,14 +480,14 @@ class Transpiler:
         
         # Map common LDmicro array names
         mappings = {
-            'Xin': 'state.inputs',
-            'Yout': 'state.outputs',
-            'Tstate': 'state.timers',
-            'Tcount': 'state.timerCounts',
-            'Cstate': 'state.counters',
-            'Ccount': 'state.counterCounts',
-            'Rinternal': 'state.internals',
-            'Tdelay': 'state.timerDelays',
+            'XIN': 'state.inputs',
+            'YOUT': 'state.outputs',
+            'TSTATE': 'state.timers',
+            'TCOUNT': 'state.timerCounts',
+            'CSTATE': 'state.counters',
+            'CCOUNT': 'state.counterCounts',
+            'RINTERNAL': 'state.internals',
+            'TDELAY': 'state.timerDelays',
         }
         return mappings.get(name, name)
     

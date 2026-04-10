@@ -28,6 +28,9 @@ class Contact:
     """A contact (input) in the ladder."""
     name: str
     normally_closed: bool = False  # NC if True, NO if False
+    kind: str = "contact"  # contact, compare
+    operator: str | None = None
+    value: int | None = None
 
 
 @dataclass
@@ -51,6 +54,8 @@ class Counter:
     name: str
     counter_type: str = "CTU"  # CTU, CTD
     preset: int = 10
+    min_value: int | None = None
+    max_value: int | None = None
 
 
 @dataclass
@@ -127,8 +132,9 @@ class LadderParser:
     def parse_ladder_diagram(self):
         """Parse the LADDER DIAGRAM section."""
         in_diagram = False
-        current_rung_num = 0
-        name_line = ""
+        current_rung_num: int | None = None
+        pending_name_line = ""
+        current_rows: list[tuple[str, str]] = []
         
         for i, line in enumerate(self.lines):
             # Find start of ladder diagram
@@ -155,7 +161,7 @@ class LadderParser:
                 if content.strip() and not any(sym in line for sym in [']-[', ']/[', ') ', '( ', '[END]', '---']):
                     # This might be a name line - but only if it has actual names
                     if re.search(r'[A-Za-z]\w*', content):
-                        name_line = line
+                        pending_name_line = line
                         continue
             
             # Check for rung line (starts with number)
@@ -168,13 +174,59 @@ class LadderParser:
                 if "[END]" in rung_content:
                     break
                 
-                # Parse this rung
-                rung = self.parse_rung(rung_num, name_line, rung_content)
-                if rung:
-                    self.program.rungs.append(rung)
-                
-                name_line = ""
+                # Finalize previous rung block.
+                if current_rung_num is not None and current_rows:
+                    rung = self.parse_rung_rows(current_rung_num, current_rows)
+                    if rung:
+                        self.program.rungs.append(rung)
+
                 current_rung_num = rung_num
+                current_rows = [(pending_name_line, rung_content)]
+                pending_name_line = ""
+                continue
+
+            # Continuation row inside current rung: no leading number but has symbols.
+            cont_match = re.match(r'\s*\|\|(.+)\|\|', line)
+            if current_rung_num is not None and cont_match:
+                content = cont_match.group(1)
+                if any(sym in content for sym in ["]", "(", "{", "[TON", "[TOF", "[CT", "+", "[RES", "=="]):
+                    current_rows.append((pending_name_line, content))
+                    pending_name_line = ""
+
+        # Finalize trailing rung block.
+        if current_rung_num is not None and current_rows:
+            rung = self.parse_rung_rows(current_rung_num, current_rows)
+            if rung:
+                self.program.rungs.append(rung)
+
+    def parse_rung_rows(self, rung_num: int, rows: list[tuple[str, str]]) -> Optional[Rung]:
+        if not rows:
+            return None
+        base = self.parse_rung(rung_num, rows[0][0], rows[0][1])
+        if not base:
+            return None
+        for name_line, content_line in rows[1:]:
+            branch = self.parse_rung(rung_num, name_line, content_line)
+            if not branch:
+                continue
+            # Continuation rows commonly branch from the first path; inherit shared
+            # leading series conditions from the base row.
+            inherited_contacts = [
+                Contact(c.name, c.normally_closed, c.kind, c.operator, c.value)
+                for c in base.contacts
+                if c.kind == "contact"
+            ]
+            inherited_timers = [Timer(t.name, t.timer_type, t.delay) for t in base.timers]
+            inherited_counters = [
+                Counter(c.name, c.counter_type, c.preset, c.min_value, c.max_value)
+                for c in base.counters
+                if c.counter_type in ("CTUCOND", "CTDCOND")
+            ]
+            branch.contacts = inherited_contacts + branch.contacts
+            branch.timers = inherited_timers + branch.timers
+            branch.counters = inherited_counters + branch.counters
+            base.parallel_branches.append(branch)
+        return base
     
     def parse_rung(self, rung_num: int, name_line: str, content_line: str) -> Optional[Rung]:
         """Parse a single rung from name line and content line."""
@@ -196,10 +248,8 @@ class LadderParser:
         elements = []
         
         # Find contacts: ] [ (NO) and ]/[ (NC)
-        # Pattern matches both: ] [ (with dashes/spaces) and ]/[ 
-        for match in re.finditer(r'(\/)?\]\s*-*\s*(\/)?\[', content_line):
-            # NC if there's a / either before ] or between ] and [
-            is_nc = match.group(1) == '/' or match.group(2) == '/'
+        for match in re.finditer(r'\]/\[|\]\s+\[', content_line):
+            is_nc = match.group(0) == ']/['
             elements.append({
                 'pos': match.start(),
                 'center': match.start() + len(match.group(0)) // 2,
@@ -223,6 +273,19 @@ class LadderParser:
                 'coil_type': ctype
             })
         
+        # Find timed blocks, e.g. [TON 250.0 ms], [TOF 1.500 s]
+        for match in re.finditer(r'\[(TON|TOF|RTO)\s+(\d+\.?\d*)\s*(ms|s)\]', content_line, re.IGNORECASE):
+            val = float(match.group(2))
+            unit = match.group(3).lower()
+            delay_ms = int(val if unit == "ms" else val * 1000.0)
+            elements.append({
+                'pos': match.start(),
+                'center': match.start() + len(match.group(0)) // 2,
+                'type': 'timer',
+                'timer_type': match.group(1).upper(),
+                'delay': delay_ms,
+            })
+
         # Find timers [TON], [TOF], etc.
         for match in re.finditer(r'\[(TON|TOF|RTO)\]', content_line):
             elements.append({
@@ -239,6 +302,57 @@ class LadderParser:
                 'center': match.start() + len(match.group(0)) // 2,
                 'type': 'counter',
                 'counter_type': match.group(1)
+            })
+
+        # Find counter condition blocks, e.g. [CTU >=4]
+        for match in re.finditer(r'\[(CTU|CTD)\s*>=\s*(\d+)\]', content_line):
+            elements.append({
+                'pos': match.start(),
+                'center': match.start() + len(match.group(0)) // 2,
+                'type': 'counter',
+                'counter_type': f"{match.group(1)}COND",
+                'preset': int(match.group(2)),
+            })
+
+        # Find compare blocks, e.g. [C1 ==] ... [ 0 ]
+        for match in re.finditer(r'\[\s*([A-Za-z_]\w*)\s*==\s*\]', content_line):
+            trailing = content_line[match.end():]
+            vmatch = re.search(r'\[\s*(\d+)\s*\]', trailing)
+            value = int(vmatch.group(1)) if vmatch else 0
+            elements.append({
+                'pos': match.start(),
+                'center': match.start() + len(match.group(0)) // 2,
+                'type': 'compare',
+                'name': match.group(1),
+                'operator': '==',
+                'value': value,
+            })
+        # Numeric compare value blocks often appear on rung line while comparator label
+        # sits on the corresponding name line above (e.g. "[C1 ==]" above "[ 0 ]").
+        for match in re.finditer(r'\[\s*(\d+)\s*\]', content_line):
+            elements.append({
+                'pos': match.start(),
+                'center': match.start() + len(match.group(0)) // 2,
+                'type': 'compare_value',
+                'value': int(match.group(1)),
+            })
+
+        # Counter actions, e.g. {CTC 0:2}, {RES}
+        for match in re.finditer(r'\{\s*CTC\s+(\d+)\s*:\s*(\d+)\s*\}', content_line):
+            elements.append({
+                'pos': match.start(),
+                'center': match.start() + len(match.group(0)) // 2,
+                'type': 'counter',
+                'counter_type': 'CTC',
+                'min_value': int(match.group(1)),
+                'max_value': int(match.group(2)),
+            })
+        for match in re.finditer(r'\{\s*RES\s*\}', content_line):
+            elements.append({
+                'pos': match.start(),
+                'center': match.start() + len(match.group(0)) // 2,
+                'type': 'counter',
+                'counter_type': 'RES',
             })
         
         # Sort elements by position
@@ -263,6 +377,23 @@ class LadderParser:
                     name=name,
                     normally_closed=elem['nc']
                 ))
+            elif elem['type'] == 'compare':
+                cmp_name = elem.get('name') or name
+                rung.contacts.append(Contact(
+                    name=cmp_name,
+                    normally_closed=False,
+                    kind='compare',
+                    operator=elem.get('operator'),
+                    value=elem.get('value', 0),
+                ))
+            elif elem['type'] == 'compare_value':
+                rung.contacts.append(Contact(
+                    name=name,
+                    normally_closed=False,
+                    kind='compare',
+                    operator='==',
+                    value=elem.get('value', 0),
+                ))
             elif elem['type'] == 'coil':
                 rung.coils.append(Coil(
                     name=name,
@@ -271,12 +402,16 @@ class LadderParser:
             elif elem['type'] == 'timer':
                 rung.timers.append(Timer(
                     name=name,
-                    timer_type=elem['timer_type']
+                    timer_type=elem['timer_type'],
+                    delay=elem.get('delay', 1000),
                 ))
             elif elem['type'] == 'counter':
                 rung.counters.append(Counter(
                     name=name,
-                    counter_type=elem['counter_type']
+                    counter_type=elem['counter_type'],
+                    preset=elem.get('preset', 10),
+                    min_value=elem.get('min_value'),
+                    max_value=elem.get('max_value'),
                 ))
         
         return rung if (rung.contacts or rung.coils or rung.timers or rung.counters) else None

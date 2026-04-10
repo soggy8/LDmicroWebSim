@@ -36,34 +36,30 @@
             <!-- Left Panel - Code Editor -->
             <section class="panel code-panel">
                 <div class="panel-header">
-                    <h2>Ladder Logic (C Code)</h2>
+                    <h2>LDmicro Text Export</h2>
                     <div class="panel-actions">
                         <button class="btn btn-small" id="loadExampleBtn">Load Example</button>
                         <label class="btn btn-small btn-file">
                             Upload
-                            <input type="file" id="fileInput" accept=".c,.txt,.ld" hidden>
+                            <input type="file" id="fileInput" accept=".txt,.ld" hidden>
                         </label>
                     </div>
                 </div>
                 <div class="code-editor-wrapper">
-                    <textarea id="codeEditor" spellcheck="false" placeholder="Paste LDmicro export here (C code OR ladder text)
+                    <textarea id="codeEditor" spellcheck="false" wrap="off" placeholder="Paste LDmicro text export here
 
-SUPPORTED FORMATS:
-1. C code export (File > Compile As > C Code)
-2. Ladder text export (File > Export As > Text)
+SUPPORTED FORMAT:
+1. Ladder text export (File > Export As > Text)
 
 BOARD I/O NAMES:
-INPUTS:  FOTO, SEN, MOV, TRIG, PO1, PO2, S1-S3, BTN1-BTN3
-OUTPUTS: FAN1-FAN3, H1-H3, PANIC, BELL
+INPUTS:  FOTO/FOTO1, SEN/FOTO2, MOV/PIR, TRIG/MAG, PO1/IND1, PO2/IND2, S1-S3, BTN1/START1, BTN2/STOP1, BTN3/START2
+OUTPUTS: FAN1-FAN3, H1-H3, PANIC, BELL, LOCK
 
 Example ladder text:
    ||       XS1              XS2              YH1       ||
  1 ||-------] [--------------]/[--------------( )-------||
 
-Example C code:
-void PlcCycle(void) {
-    if (BTN1) { H1 = 1; }
-}"></textarea>
+"></textarea>
                     <div class="line-numbers" id="lineNumbers"></div>
                 </div>
                 <div class="panel-footer">
@@ -90,30 +86,32 @@ void PlcCycle(void) {
 
                 <!-- Physical Control Board -->
                 <div class="control-board physical-board">
-                    <!-- Board Title -->
-                    <div class="board-title">
-                        <span class="title-main">ПРОГРАМАБИЛЕН ЛОГИЧКИ УПРАВУВАЧ</span>
+                    <div class="board-headings">
+                        <div class="board-side-title input-title">ВЛЕЗНИ ЕДИНИЦИ</div>
+                        <div class="board-title">
+                            <span class="title-main">ПРОГРАМАБИЛЕН ЛОГИЧКИ УПРАВУВАЧ</span>
+                        </div>
+                        <div class="board-side-title output-title">ИЗЛЕЗНИ ЕДИНИЦИ</div>
                     </div>
 
-                    <!-- ROW 1: FOTO, SEN, MOV, FAN1, FAN2, FAN3 -->
-                    <div class="board-row">
+                    <div class="board-row io-split-row">
                         <div class="input-component">
                             <div class="sensor-box light-sensor" data-input="FOTO">
                                 <div class="sensor-icon">☀</div>
                             </div>
-                            <span class="component-label">FOTO</span>
+                            <span class="component-label">FOTO1 <small>(FOTO)</small></span>
                         </div>
                         <div class="input-component">
                             <div class="sensor-box proximity-sensor" data-input="SEN">
                                 <div class="sensor-icon">◎</div>
                             </div>
-                            <span class="component-label">SEN</span>
+                            <span class="component-label">FOTO2 <small>(SEN)</small></span>
                         </div>
                         <div class="input-component">
                             <div class="sensor-box motion-sensor" data-input="MOV">
                                 <div class="sensor-icon">👁</div>
                             </div>
-                            <span class="component-label">MOV</span>
+                            <span class="component-label">PIR <small>(MOV)</small></span>
                         </div>
                         <div class="fan-component" data-output="FAN1">
                             <div class="fan-housing">
@@ -135,25 +133,24 @@ void PlcCycle(void) {
                         </div>
                     </div>
 
-                    <!-- ROW 2: TRIG, PO1, PO2, H1, H2, H3 -->
-                    <div class="board-row">
+                    <div class="board-row io-split-row">
                         <div class="input-component">
                             <div class="sensor-box trigger-sensor" data-input="TRIG">
                                 <div class="sensor-icon">🚪</div>
                             </div>
-                            <span class="component-label">TRIG</span>
+                            <span class="component-label">MAG <small>(TRIG)</small></span>
                         </div>
                         <div class="input-component">
                             <div class="sensor-box metal-sensor" data-input="PO1">
                                 <div class="sensor-icon">⬤</div>
                             </div>
-                            <span class="component-label">PO1</span>
+                            <span class="component-label">IND1 <small>(PO1)</small></span>
                         </div>
                         <div class="input-component">
                             <div class="sensor-box metal-sensor" data-input="PO2">
                                 <div class="sensor-icon">⬤</div>
                             </div>
-                            <span class="component-label">PO2</span>
+                            <span class="component-label">IND2 <small>(PO2)</small></span>
                         </div>
                         <div class="indicator-light green" data-output="H1">
                             <div class="light-lens"></div>
@@ -169,8 +166,28 @@ void PlcCycle(void) {
                         </div>
                     </div>
 
-                    <!-- ROW 3: S1, S2, S3, PLACEHOLDER, PANIC, BELL -->
-                    <div class="board-row">
+                    <div class="plc-center-block">
+                        <div class="plc-core-inline">
+                            <div class="plc-pin-rail plc-pin-rail-input" id="plcInputPins">
+                                <!-- DI/AI pins injected by JS -->
+                            </div>
+                            <div class="plc-module">
+                                <div class="plc-screen"></div>
+                                <div class="plc-controls">
+                                    <span class="plc-key"></span>
+                                    <span class="plc-key"></span>
+                                    <span class="plc-key"></span>
+                                    <span class="plc-key"></span>
+                                </div>
+                                <span class="component-label">PLC CONTROLLER</span>
+                            </div>
+                            <div class="plc-pin-rail plc-pin-rail-output" id="plcOutputPins">
+                                <!-- DO/AO pins injected by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="board-row io-split-row plc-side-row">
                         <div class="input-component">
                             <label class="light-switch" data-input="S1">
                                 <input type="checkbox">
@@ -200,9 +217,9 @@ void PlcCycle(void) {
                         </div>
                         <div class="output-component">
                             <div class="placeholder-box">
-                                <span class="placeholder-icon">?</span>
+                                <span class="placeholder-icon">LOCK</span>
                             </div>
-                            <span class="component-label">---</span>
+                            <span class="component-label">LOCK <small>(virtual)</small></span>
                         </div>
                         <div class="output-component">
                             <div class="panic-light" data-output="PANIC">
@@ -218,25 +235,38 @@ void PlcCycle(void) {
                         </div>
                     </div>
 
-                    <!-- ROW 4: BTN1, BTN2, BTN3 -->
                     <div class="board-row buttons-row">
                         <div class="input-component">
                             <button class="push-button green" data-input="BTN1">
                                 <span class="btn-symbol">●</span>
                             </button>
-                            <span class="component-label">BTN1</span>
+                            <span class="component-label">START1 <small>(BTN1)</small></span>
                         </div>
                         <div class="input-component">
-                            <button class="push-button yellow" data-input="BTN2">
+                            <button class="push-button red" data-input="BTN2">
                                 <span class="btn-symbol">●</span>
                             </button>
-                            <span class="component-label">BTN2</span>
+                            <span class="component-label">STOP1 <small>(BTN2)</small></span>
                         </div>
                         <div class="input-component">
-                            <button class="push-button red" data-input="BTN3">
+                            <button class="push-button green" data-input="BTN3">
                                 <span class="btn-symbol">●</span>
                             </button>
-                            <span class="component-label">BTN3</span>
+                            <span class="component-label">START2 <small>(BTN3)</small></span>
+                        </div>
+                        <div class="contactors-grid">
+                            <div class="contactor-card">
+                                <div class="contactor-top"></div>
+                                <span class="component-label">K1</span>
+                            </div>
+                            <div class="contactor-card">
+                                <div class="contactor-top"></div>
+                                <span class="component-label">K2</span>
+                            </div>
+                            <div class="contactor-card">
+                                <div class="contactor-top"></div>
+                                <span class="component-label">K3</span>
+                            </div>
                         </div>
                     </div>
 
@@ -253,6 +283,7 @@ void PlcCycle(void) {
                             </div>
                         </div>
                     </div>
+                    <svg id="wiringCanvas" class="wiring-canvas" aria-label="Wire connections"></svg>
                 </div>
 
                 <!-- Simulation Controls -->
@@ -280,7 +311,7 @@ void PlcCycle(void) {
         <!-- Footer -->
         <footer class="footer">
             <div class="footer-info">
-                LDmicro Web Simulator • Use component names: FOTO, SEN, BTN1, H1, FAN1, etc.
+                LDmicro Web Simulator • Use canonical names or aliases: FOTO/FOTO1, SEN/FOTO2, MOV/PIR, TRIG/MAG, PO1/IND1, PO2/IND2, BTN1/START1, BTN2/STOP1, BTN3/START2
             </div>
         </footer>
     </div>

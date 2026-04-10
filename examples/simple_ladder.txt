@@ -1,0 +1,31 @@
+LDmicro export text
+for 'Microchip PIC16F877 40-PDIP', 8.000000 MHz crystal, 0.5 ms cycle time
+
+
+LADDER DIAGRAM:
+
+   ||                                  ||
+   ||       XS1              YH1       ||
+ 1 ||-------] [--------------( )-------||
+   ||                                  ||
+   ||                                  ||
+   ||                                  ||
+   ||                                  ||
+   ||       XS2              YH2       ||
+ 2 ||-------] [--------------( )-------||
+   ||                                  ||
+   ||                                  ||
+   ||                                  ||
+   ||------[END]-----------------------||
+   ||                                  ||
+   ||                                  ||
+
+
+I/O ASSIGNMENT:
+
+  Name                       | Type               | Pin
+ ----------------------------+--------------------+------
+  XS1                        | Digital input      | 2
+  XS2                        | Digital input      | 3
+  YH1                        | Digital output     | 21
+  YH2                        | Digital output     | 22

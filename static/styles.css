@@ -189,7 +189,8 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0;
-    min-height: calc(100vh - var(--header-height) - var(--footer-height));
+    min-height: 0;
+    height: calc(100vh - var(--header-height) - var(--footer-height));
 }
 
 /* Panels */
@@ -198,10 +199,17 @@ body {
     flex-direction: column;
     background: var(--bg-secondary);
     border: 1px solid var(--border-primary);
+    min-height: 0;
+    overflow: hidden;
 }
 
 .code-panel {
     border-right: 1px solid var(--border-primary);
+}
+
+.board-panel {
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .panel-header {
@@ -313,6 +321,7 @@ body {
 /* Code Editor */
 .code-editor-wrapper {
     flex: 1;
+    min-height: 0;
     position: relative;
     display: flex;
     overflow: hidden;
@@ -334,6 +343,8 @@ body {
 
 #codeEditor {
     flex: 1;
+    min-height: 0;
+    min-width: 0;
     background: var(--bg-input);
     border: none;
     padding: 16px;
@@ -344,6 +355,11 @@ body {
     resize: none;
     outline: none;
     tab-size: 4;
+    white-space: pre;
+    overflow-wrap: normal;
+    word-break: normal;
+    overflow-x: auto;
+    overflow-y: auto;
 }
 
 #codeEditor::placeholder {
@@ -372,12 +388,28 @@ body {
     color: var(--accent-red);
 }
 
+.hex-debug {
+    margin: 0 20px 12px;
+    padding: 8px 10px;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--text-secondary);
+    background: var(--bg-editor);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    max-height: 4.5em;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
 /* ============================================================================
    PHYSICAL CONTROL BOARD
    ============================================================================ */
 
 .physical-board {
-    flex: 1;
+    flex: 0 0 auto;
     background: var(--board-bg);
     border: 4px solid #888;
     border-radius: 8px;
@@ -389,7 +421,15 @@ body {
     box-shadow: 
         inset 0 2px 4px rgba(255,255,255,0.5),
         0 8px 32px rgba(0,0,0,0.4);
-    overflow-y: auto;
+    overflow: visible;
+    position: relative;
+}
+
+.board-headings {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
 }
 
 .board-title {
@@ -403,15 +443,266 @@ body {
     font-size: 14px;
 }
 
+.board-side-title {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 8px 10px;
+    border: 2px solid;
+    background: #f7f7f7;
+    color: #333;
+    border-radius: 4px;
+}
+
+.input-title {
+    border-color: #1f8fa9;
+}
+
+.output-title {
+    border-color: #c94848;
+}
+
 .board-row {
     display: flex;
     justify-content: center;
     gap: 16px;
     flex-wrap: wrap;
     padding: 10px;
-    background: var(--board-panel);
-    border: 2px solid var(--board-border);
+    background: transparent;
+    border: none;
     border-radius: 8px;
+}
+
+.io-split-row {
+    justify-content: flex-start;
+    padding-left: 18px;
+    padding-right: 18px;
+    flex-wrap: nowrap;
+}
+
+/* Create a clear middle split: first 3 left, last 3 right */
+.io-split-row > :nth-child(3) {
+    margin-right: auto;
+}
+
+.plc-side-row {
+    margin-top: 2px;
+}
+
+.plc-core-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.plc-center-block {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 6px 0 10px;
+    gap: 10px;
+    position: relative;
+    min-height: 190px;
+}
+
+/* Wires are visual-only; hit-testing is geometric in simulator.js (SVG pointer-events are unreliable). */
+.wiring-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 95;
+    overflow: visible;
+}
+
+.wiring-canvas .wire-path,
+.wiring-canvas .wire-path-preview {
+    pointer-events: none;
+}
+
+.wiring-canvas .wire-path-selected {
+    stroke-width: 5;
+    filter: drop-shadow(0 0 3px rgba(255, 200, 80, 0.95));
+}
+
+.plc-core-inline {
+    position: relative;
+    z-index: 2;
+}
+
+.plc-pin-rail {
+    width: 88px;
+    border: 2px solid #9ea9b1;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #e1e6ea, #cfd7dc);
+    padding: 8px 6px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    align-content: start;
+}
+
+.plc-pin {
+    position: relative;
+    font-size: 9px;
+    font-weight: 700;
+    color: #22313d;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.plc-pin-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin: 0 auto 2px;
+    background: radial-gradient(circle at 35% 35%, #d1d6db 0%, #8f99a3 62%, #6b737c 100%);
+    border: 1px solid #5b646d;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.plc-pin.connected .plc-pin-dot {
+    background: radial-gradient(circle at 35% 35%, #fd8080 0%, #c92f2f 62%, #8d1d1d 100%);
+    border-color: #7a1818;
+}
+
+.input-component,
+.output-component,
+.fan-component,
+.indicator-light,
+.panic-light {
+    position: relative;
+}
+
+.wire-node {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid #2b2b2b;
+    background: radial-gradient(circle at 35% 35%, #d1d6db 0%, #8f99a3 62%, #6b737c 100%);
+    border: 1px solid #5b646d;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: crosshair;
+    z-index: 100;
+}
+
+.wire-node.connected {
+    background: radial-gradient(circle at 35% 35%, #ff8d8d 0%, #b92626 65%, #741616 100%);
+    border-color: #741616;
+}
+
+.wire-node.active {
+    background: radial-gradient(circle at 35% 35%, #9dffa3 0%, #2ca83a 65%, #1a6b22 100%);
+    border-color: #1d6f28;
+}
+
+.plc-pin.active .plc-pin-dot {
+    background: radial-gradient(circle at 35% 35%, #9dffa3 0%, #2ca83a 65%, #1a6b22 100%);
+    border-color: #1d6f28;
+}
+
+.wire-path {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.3));
+}
+
+.wire-path-preview {
+    stroke: #147ab8;
+    stroke-dasharray: 6 5;
+    opacity: 0.8;
+}
+
+.terminal-led-column {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 8px;
+    border: 2px solid #b1b1b1;
+    border-radius: 6px;
+    background: #ececec;
+}
+
+.terminal-led {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #ff8a80 0%, #bf2020 60%, #6f1010 100%);
+    border: 1px solid #7f1717;
+}
+
+.plc-module {
+    width: 190px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 2px solid #8d8d8d;
+    background: linear-gradient(145deg, #4ea64e, #2f7f2f);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.plc-screen {
+    width: 92px;
+    height: 68px;
+    border: 3px solid #1f2b1f;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #1f3342, #173246);
+    box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.55);
+}
+
+.plc-controls {
+    display: flex;
+    gap: 6px;
+}
+
+.plc-key {
+    width: 18px;
+    height: 10px;
+    border-radius: 2px;
+    background: #e8e8e8;
+    border: 1px solid #bfbfbf;
+}
+
+.contactors-grid {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-left: auto;
+}
+
+.contactor-card {
+    width: 56px;
+    padding: 6px 6px 4px;
+    border-radius: 4px;
+    border: 2px solid #8f8f8f;
+    background: linear-gradient(180deg, #f4f4f4, #dcdcdc);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.buttons-row {
+    justify-content: flex-start;
+}
+
+.contactor-top {
+    width: 40px;
+    height: 32px;
+    border-radius: 2px;
+    border: 1px solid #737373;
+    background: linear-gradient(180deg, #8fa2b8, #677d95);
+    margin-bottom: 4px;
 }
 
 .board-section {
@@ -429,6 +720,14 @@ body {
     letter-spacing: 1px;
     margin-top: 6px;
     text-align: center;
+}
+
+.component-label small {
+    display: block;
+    font-size: 9px;
+    font-weight: 600;
+    color: #666;
+    letter-spacing: 0.4px;
 }
 
 /* Input/Output Component wrapper */
@@ -822,7 +1121,8 @@ body {
 }
 
 .placeholder-icon {
-    font-size: 24px;
+    font-size: 12px;
+    font-weight: 700;
     color: #666;
 }
 
@@ -935,6 +1235,10 @@ body {
     
     .board-row {
         gap: 10px;
+    }
+
+    .plc-module {
+        width: 150px;
     }
 }
 

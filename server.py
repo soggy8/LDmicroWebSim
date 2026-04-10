@@ -2,13 +2,9 @@
 """
 LDmicro Web Simulator - FastAPI Server
 
-Provides endpoints for:
-- Uploading and parsing LDmicro exports (C code OR ladder text)
-- Getting simulation configuration
-
-Supports both export formats from LDmicro:
-1. C code export
-2. Text ladder diagram export
+Text-export-only mode:
+- Upload/compile LDmicro ladder text export
+- Return simulation-ready JSON
 """
 
 import os
@@ -18,7 +14,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from interpreter import Lexer, transpile_unified, detect_format
+from interpreter import (
+    transpile_unified,
+    detect_format,
+)
 
 
 # ============================================================================
@@ -46,7 +45,7 @@ app.add_middleware(
 # ============================================================================
 
 class CompileRequest(BaseModel):
-    """Request to compile C code."""
+    """Request to compile LDmicro text export."""
     source_code: str
 
 
@@ -55,21 +54,6 @@ class CompileResponse(BaseModel):
     success: bool
     message: str
     simulation: dict | None = None
-
-
-class TokenInfo(BaseModel):
-    """Token information for debugging."""
-    type: str
-    value: str
-    line: int
-    column: int
-
-
-class LexerResponse(BaseModel):
-    """Response from lexer (for debugging)."""
-    success: bool
-    tokens: list[TokenInfo]
-    message: str = ""
 
 
 # ============================================================================
@@ -86,9 +70,8 @@ async def root():
         "message": "LDmicro Web Simulator API",
         "docs": "/docs",
         "endpoints": {
-            "POST /api/compile": "Compile C code to simulation JSON",
-            "POST /api/upload": "Upload a C file",
-            "POST /api/lex": "Tokenize C code (debug)",
+            "POST /api/compile": "Compile LDmicro text export to simulation JSON",
+            "POST /api/upload": "Upload LDmicro text export file",
         }
     }
 
@@ -96,22 +79,24 @@ async def root():
 @app.post("/api/compile", response_model=CompileResponse)
 async def compile_code(request: CompileRequest):
     """
-    Compile LDmicro export to simulation-ready JSON.
-    
-    Supports both formats:
-    - C code export
-    - Text ladder diagram export
-    
-    Auto-detects the format and parses accordingly.
+    Compile LDmicro text export to simulation-ready JSON.
     """
     try:
-        # Detect format and transpile
         format_type = detect_format(request.source_code)
+        if format_type != "ladder":
+            return CompileResponse(
+                success=False,
+                message=(
+                    "Only LDmicro text export is supported. "
+                    "Use LDmicro 'Export As -> Text' and paste that content."
+                ),
+                simulation=None,
+            )
         program = transpile_unified(request.source_code)
-        
+
         return CompileResponse(
             success=True,
-            message=f"Compilation successful (detected: {format_type} format)",
+            message="Compilation successful (text export)",
             simulation=program.to_dict()
         )
     
@@ -128,28 +113,32 @@ async def compile_code(request: CompileRequest):
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
     """
-    Upload an LDmicro export file and compile it.
-    Supports .c (C code) and .txt (ladder diagram) files.
+    Upload an LDmicro text export file and compile it.
     """
-    valid_extensions = ('.c', '.txt', '.ld')
+    valid_extensions = ('.txt', '.ld')
     if not any(file.filename.endswith(ext) for ext in valid_extensions):
         raise HTTPException(
             status_code=400,
-            detail="File must be .c, .txt, or .ld file"
+            detail="File must be .txt or .ld file (LDmicro text export)"
         )
     
     try:
         content = await file.read()
         source_code = content.decode('utf-8')
-        
+
         format_type = detect_format(source_code)
+        if format_type != "ladder":
+            raise HTTPException(
+                status_code=400,
+                detail="Only LDmicro text export is supported",
+            )
         program = transpile_unified(source_code)
-        
+
         return {
             "success": True,
             "filename": file.filename,
             "format": format_type,
-            "message": f"File uploaded and compiled successfully ({format_type} format)",
+            "message": "File uploaded and compiled successfully (text export)",
             "simulation": program.to_dict()
         }
     
@@ -167,48 +156,15 @@ async def upload_file(file: UploadFile = File(...)):
         )
 
 
-@app.post("/api/lex", response_model=LexerResponse)
-async def lex_code(request: CompileRequest):
-    """
-    Tokenize C code (for debugging).
-    Returns the list of tokens.
-    """
-    try:
-        lexer = Lexer(request.source_code)
-        tokens = lexer.tokenize()
-        
-        token_info = [
-            TokenInfo(
-                type=t.type.name,
-                value=t.value,
-                line=t.line,
-                column=t.column
-            )
-            for t in tokens
-        ]
-        
-        return LexerResponse(
-            success=True,
-            tokens=token_info
-        )
-    
-    except Exception as e:
-        return LexerResponse(
-            success=False,
-            tokens=[],
-            message=f"Lexer error: {str(e)}"
-        )
-
-
 @app.get("/api/example")
 async def get_example():
     """
-    Get example LDmicro C code.
+    Get example LDmicro text export.
     """
     example_path = os.path.join(
         os.path.dirname(__file__),
         "examples",
-        "simple_ladder.c"
+        "simple_ladder.txt"
     )
     
     if not os.path.exists(example_path):
@@ -221,7 +177,7 @@ async def get_example():
         source_code = f.read()
     
     return {
-        "filename": "simple_ladder.c",
+        "filename": "simple_ladder.txt",
         "source_code": source_code
     }
 
