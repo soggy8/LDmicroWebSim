@@ -216,10 +216,10 @@ Example ladder text:
                             <span class="component-label">S3</span>
                         </div>
                         <div class="output-component">
-                            <div class="placeholder-box">
-                                <span class="placeholder-icon">LOCK</span>
+                            <div class="lock-output" data-output="LOCK" title="Door lock / solenoid output">
+                                <span class="lock-icon" aria-hidden="true">🔒</span>
                             </div>
-                            <span class="component-label">LOCK <small>(virtual)</small></span>
+                            <span class="component-label">LOCK</span>
                         </div>
                         <div class="output-component">
                             <div class="panic-light" data-output="PANIC">
@@ -255,33 +255,30 @@ Example ladder text:
                             <span class="component-label">START2 <small>(BTN3)</small></span>
                         </div>
                         <div class="contactors-grid">
-                            <div class="contactor-card">
-                                <div class="contactor-top"></div>
+                            <div class="output-component">
+                                <div class="contactor-card" data-output="K1" title="Contactor K1">
+                                    <div class="contactor-top"></div>
+                                </div>
                                 <span class="component-label">K1</span>
                             </div>
-                            <div class="contactor-card">
-                                <div class="contactor-top"></div>
+                            <div class="output-component">
+                                <div class="contactor-card" data-output="K2" title="Contactor K2">
+                                    <div class="contactor-top"></div>
+                                </div>
                                 <span class="component-label">K2</span>
                             </div>
-                            <div class="contactor-card">
-                                <div class="contactor-top"></div>
+                            <div class="output-component">
+                                <div class="contactor-card" data-output="K3" title="Contactor K3">
+                                    <div class="contactor-top"></div>
+                                </div>
                                 <span class="component-label">K3</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Status Display -->
-                    <div class="board-section status-section">
-                        <div class="status-grid">
-                            <div class="status-block">
-                                <div class="status-title">Timers</div>
-                                <div class="status-values" id="timerStatus">T0: 0 | T1: 0 | T2: 0 | T3: 0</div>
-                            </div>
-                            <div class="status-block">
-                                <div class="status-title">Counters</div>
-                                <div class="status-values" id="counterStatus">C0: 0 | C1: 0</div>
-                            </div>
-                        </div>
+                    <!-- Runtime timers/counters (filled after compile when ladder uses them) -->
+                    <div class="board-section status-section" id="statusSection" hidden>
+                        <div class="status-grid" id="statusGrid"></div>
                     </div>
                     <svg id="wiringCanvas" class="wiring-canvas" aria-label="Wire connections"></svg>
                 </div>

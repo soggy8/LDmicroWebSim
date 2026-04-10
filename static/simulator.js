@@ -5,8 +5,8 @@
  * 
  * ROW 1: FOTO, SEN, MOV, FAN1, FAN2, FAN3
  * ROW 2: TRIG, PO1, PO2, H1, H2, H3
- * ROW 3: S1, S2, S3, ---, PANIC, BELL
- * ROW 4: BTN1, BTN2, BTN3
+ * ROW 3: S1, S2, S3, LOCK, PANIC, BELL
+ * ROW 4: BTN1, BTN2, BTN3, K1, K2, K3
  * 
  * INPUTS:
  *   FOTO - Light sensor (click to toggle)
@@ -26,6 +26,8 @@
  *   H3 - Red indicator light
  *   PANIC - Strobe panic light
  *   BELL - Emergency bell
+ *   LOCK - Door / lock solenoid (digital output)
+ *   K1, K2, K3 - Power contactors (digital outputs)
  */
 
 // Board configuration - matches the physical training board exactly
@@ -57,9 +59,14 @@ const BOARD_CONFIG = {
         { name: "H1", type: "light", color: "green" },
         { name: "H2", type: "light", color: "yellow" },
         { name: "H3", type: "light", color: "red" },
-        // Row 3 - Alarms
+        // Row 3 - Alarms + lock (indices must match interpreter BOARD_OUTPUTS)
         { name: "PANIC", type: "strobe" },
         { name: "BELL", type: "buzzer" },
+        { name: "LOCK", type: "lock" },
+        // Contactors (same index order as interpreter)
+        { name: "K1", type: "contactor" },
+        { name: "K2", type: "contactor" },
+        { name: "K3", type: "contactor" },
     ]
 };
 
@@ -145,8 +152,8 @@ class PLCSimulator {
             cycleCount: document.getElementById('cycleCount'),
             statusIndicator: document.getElementById('statusIndicator'),
             statusText: document.querySelector('.status-text'),
-            timerStatus: document.getElementById('timerStatus'),
-            counterStatus: document.getElementById('counterStatus'),
+            statusSection: document.getElementById('statusSection'),
+            statusGrid: document.getElementById('statusGrid'),
             plcInputPins: document.getElementById('plcInputPins'),
             plcOutputPins: document.getElementById('plcOutputPins'),
             wiringCanvas: document.getElementById('wiringCanvas'),
@@ -216,7 +223,12 @@ class PLCSimulator {
 
     attachComponentWireNodes() {
         const inputSelectors = ['.sensor-box[data-input]', '.light-switch[data-input]', '.push-button[data-input]'];
-        const outputSelectors = ['[data-output="FAN1"]', '[data-output="FAN2"]', '[data-output="FAN3"]', '[data-output="H1"]', '[data-output="H2"]', '[data-output="H3"]', '[data-output="PANIC"]', '[data-output="BELL"]'];
+        const outputSelectors = [
+            '[data-output="FAN1"]', '[data-output="FAN2"]', '[data-output="FAN3"]',
+            '[data-output="H1"]', '[data-output="H2"]', '[data-output="H3"]',
+            '[data-output="PANIC"]', '[data-output="BELL"]', '[data-output="LOCK"]',
+            '[data-output="K1"]', '[data-output="K2"]', '[data-output="K3"]',
+        ];
 
         document.querySelectorAll('.wire-node').forEach((n) => n.remove());
 
@@ -232,7 +244,12 @@ class PLCSimulator {
         outputSelectors.forEach((selector) => {
             document.querySelectorAll(selector).forEach((el) => {
                 const name = el.dataset.output;
-                const host = el.closest('.fan-component, .indicator-light, .output-component, .panic-light') || el;
+                // Prefer the full output column (icon + label) so the wire dot sits below the text,
+                // matching BELL and avoiding overlap on LOCK / PANIC / contactors.
+                const host =
+                    el.closest('.output-component')
+                    || el.closest('.fan-component, .indicator-light')
+                    || el;
                 if (!name || !host) return;
                 this.createWireNode(host, 'component-output', name);
             });
@@ -300,7 +317,7 @@ class PLCSimulator {
             if (el.matches('button, input, textarea, select, option')) return true;
             if (el.closest('[data-node-type]')) return true;
             if (el.closest('.sensor-box, .push-button, .light-switch')) return true;
-            if (el.closest('.fan-housing, .indicator-light, .panic-light, .bell-box')) return true;
+            if (el.closest('.fan-housing, .indicator-light, .panic-light, .bell-box, .lock-output, .contactor-card')) return true;
             if (el.closest('.contactor-card, .plc-module, .plc-display, .plc-key')) return true;
             if (el.closest('.board-headings, .status-section, .board-title, .board-side-title')) return true;
             return false;
@@ -514,7 +531,7 @@ class PLCSimulator {
         const penalty = Array.from({ length: rows }, () => Array(cols).fill(0));
 
         const obstacles = Array.from(document.querySelectorAll(
-            '.board-headings, .sensor-box, .fan-housing, .indicator-light, .light-switch, .push-button, .placeholder-box, .panic-light, .bell-box, .contactors-grid, .status-section, .plc-module, .plc-pin-rail'
+            '.board-headings, .sensor-box, .fan-housing, .indicator-light, .light-switch, .push-button, .lock-output, .panic-light, .bell-box, .contactor-card, .status-section, .plc-module, .plc-pin-rail'
         ));
 
         obstacles.forEach((el) => {
@@ -958,10 +975,16 @@ I/O ASSIGNMENT:
             } else {
                 this.setStatus('Error', 'error');
                 this.setCompileStatus('✗ ' + data.message, 'error');
+                if (this.elements.statusSection) {
+                    this.elements.statusSection.hidden = true;
+                }
             }
         } catch (error) {
             this.setStatus('Error', 'error');
             this.setCompileStatus('✗ Network error: ' + error.message, 'error');
+            if (this.elements.statusSection) {
+                this.elements.statusSection.hidden = true;
+            }
         }
     }
 
@@ -971,7 +994,8 @@ I/O ASSIGNMENT:
 
     loadSimulation(config) {
         this.config = config;
-        
+        delete this.state.__ld;
+
         // Reset state
         this.state.inputs.fill(0);
         this.state.outputs.fill(0);
@@ -996,13 +1020,15 @@ I/O ASSIGNMENT:
         } catch (error) {
             console.error('Failed to create PlcCycle function:', error);
             this.setCompileStatus('✗ Invalid generated code: ' + error.message, 'error');
+            this.buildRuntimeStatusPanel({ timers: [], counters: [] });
             return;
         }
-        
+
         // Reset UI
         this.resetBoardUI();
+        this.buildRuntimeStatusPanel(config);
         this.updateStatusDisplay();
-        
+
         this.cycleCount = 0;
         this.elements.cycleCount.textContent = '0';
     }
@@ -1085,8 +1111,9 @@ I/O ASSIGNMENT:
     
     reset() {
         this.stop();
-        
+
         // Reset all state
+        delete this.state.__ld;
         this.state.inputs.fill(0);
         this.state.outputs.fill(0);
         this.rawInputs.fill(0);
@@ -1096,7 +1123,7 @@ I/O ASSIGNMENT:
         this.state.counters.fill(0);
         this.state.counterCounts.fill(0);
         this.state.internals.fill(0);
-        
+
         this.cycleCount = 0;
         this.elements.cycleCount.textContent = '0';
         
@@ -1159,6 +1186,11 @@ I/O ASSIGNMENT:
                 panicComponent.classList.toggle('active', isActive);
             } else if (output.type === 'buzzer') {
                 element.classList.toggle('active', isActive);
+            } else if (output.type === 'lock') {
+                element.classList.toggle('active', isActive);
+            } else if (output.type === 'contactor') {
+                const card = element.closest('.contactor-card') || element;
+                card.classList.toggle('active', isActive);
             }
         });
     }
@@ -1225,18 +1257,77 @@ I/O ASSIGNMENT:
         });
     }
     
+    /**
+     * Build timers/counters status strip from compiled program metadata.
+     * Hidden when the ladder defines neither.
+     */
+    buildRuntimeStatusPanel(config) {
+        const sec = this.elements.statusSection;
+        const grid = this.elements.statusGrid;
+        if (!sec || !grid) return;
+
+        const timers = config.timers || [];
+        const counters = config.counters || [];
+        grid.innerHTML = '';
+        grid.classList.toggle('status-grid--single', timers.length === 0 || counters.length === 0);
+
+        if (timers.length === 0 && counters.length === 0) {
+            sec.hidden = true;
+            return;
+        }
+
+        sec.hidden = false;
+        if (timers.length) {
+            const block = document.createElement('div');
+            block.className = 'status-block';
+            block.innerHTML = '<div class="status-title">Timers</div><div class="status-values" id="timerStatus"></div>';
+            grid.appendChild(block);
+        }
+        if (counters.length) {
+            const block = document.createElement('div');
+            block.className = 'status-block';
+            block.innerHTML = '<div class="status-title">Counters</div><div class="status-values" id="counterStatus"></div>';
+            grid.appendChild(block);
+        }
+    }
+
     updateStatusDisplay() {
-        // Update timer status
-        const timerInfo = this.state.timerCounts.map((count, i) => {
-            return `T${i}: ${count}`;
-        }).join(' | ');
-        this.elements.timerStatus.textContent = timerInfo;
-        
-        // Update counter status
-        const counterInfo = this.state.counterCounts.map((count, i) => {
-            return `C${i}: ${count}`;
-        }).join(' | ');
-        this.elements.counterStatus.textContent = counterInfo;
+        const sec = this.elements.statusSection;
+        if (!sec || sec.hidden) return;
+
+        const timers = this.config?.timers || [];
+        const counters = this.config?.counters || [];
+        const ld = this.state.__ld;
+
+        const tEl = document.getElementById('timerStatus');
+        if (tEl && timers.length) {
+            const parts = timers.map((t) => {
+                const cell = ld?.timers?.[t.name];
+                const acc = cell ? Math.round(cell.acc) : 0;
+                const out = cell?.out ? ' ●' : '';
+                const preset = t.delay_ms > 0 ? ` / ${t.delay_ms} ms` : '';
+                return `${t.name}: ${acc} ms${preset}${out}`;
+            });
+            tEl.textContent = parts.join('  |  ');
+        }
+
+        const cEl = document.getElementById('counterStatus');
+        if (cEl && counters.length) {
+            const parts = counters.map((c) => {
+                const v = ld?.counters?.[c.name];
+                const val = v != null ? v : 0;
+                const ct = c.counter_type;
+                if (ct === 'CTUCOND' || ct === 'CTDCOND') {
+                    const p = c.preset != null ? c.preset : '?';
+                    return `${c.name}: ${val} / ${p}`;
+                }
+                if (ct === 'CTC' && c.min_value != null && c.max_value != null) {
+                    return `${c.name}: ${val} (${c.min_value}–${c.max_value})`;
+                }
+                return `${c.name}: ${val}`;
+            });
+            cEl.textContent = parts.join('  |  ');
+        }
     }
     
     setStatus(text, state) {

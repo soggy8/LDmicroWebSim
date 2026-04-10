@@ -126,6 +126,10 @@ Use these names in your LDmicro program to map to the virtual board:
 | `H3` / `YH3` | Light | Red indicator |
 | `PANIC` / `YPANIC` | Strobe | Panic strobe light |
 | `BELL` / `YBELL` | Buzzer | Emergency bell |
+| `LOCK` / `YLOCK` | Lock | Door lock / solenoid (digital output) |
+| `K1` / `YK1` | Contactor | Power contactor 1 |
+| `K2` / `YK2` | Contactor | Power contactor 2 |
+| `K3` / `YK3` | Contactor | Power contactor 3 |
 
 > **Note**: LDmicro uses `X` prefix for inputs and `Y` prefix for outputs. The simulator automatically handles both conventions.
 

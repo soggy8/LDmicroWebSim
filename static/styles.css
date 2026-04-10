@@ -570,7 +570,7 @@ body {
     border: 1px solid #2b2b2b;
     background: radial-gradient(circle at 35% 35%, #d1d6db 0%, #8f99a3 62%, #6b737c 100%);
     border: 1px solid #5b646d;
-    bottom: -8px;
+    bottom: -14px;
     left: 50%;
     transform: translateX(-50%);
     cursor: crosshair;
@@ -666,6 +666,7 @@ body {
 }
 
 .contactor-card {
+    position: relative;
     width: 56px;
     padding: 6px 6px 4px;
     border-radius: 4px;
@@ -674,6 +675,17 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.contactor-card.active {
+    border-color: #2e7d32;
+    box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.35);
+}
+
+.contactor-card.active .contactor-top {
+    background: linear-gradient(180deg, #66bb6a, #2e7d32);
+    border-color: #1b5e20;
 }
 
 .buttons-row {
@@ -1090,24 +1102,37 @@ body {
 }
 
 /* ============================================================================
-   PLACEHOLDER
+   LOCK OUTPUT
    ============================================================================ */
 
-.placeholder-box {
+.lock-output {
+    position: relative;
     width: 55px;
     height: 55px;
-    background: #9e9e9e;
-    border: 2px dashed #666;
+    background: linear-gradient(145deg, #5c6bc0, #3949ab);
+    border: 2px solid #283593;
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    transition: background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
-.placeholder-icon {
-    font-size: 12px;
-    font-weight: 700;
-    color: #666;
+.lock-output .lock-icon {
+    font-size: 26px;
+    line-height: 1;
+    filter: grayscale(0.35) brightness(0.95);
+}
+
+.lock-output.active {
+    background: linear-gradient(145deg, #7e57c2, #5e35b1);
+    border-color: #4527a0;
+    box-shadow: 0 0 14px rgba(126, 87, 194, 0.65);
+}
+
+.lock-output.active .lock-icon {
+    filter: none;
 }
 
 /* ============================================================================
@@ -1123,6 +1148,10 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
+}
+
+.status-grid.status-grid--single {
+    grid-template-columns: 1fr;
 }
 
 .status-block {

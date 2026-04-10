@@ -57,3 +57,30 @@ def test_complex_text_parses_and_transpiles_features():
     assert "ctuCond" in js
     assert "resAction" in js
     assert "rt.counters" in js
+    assert "word(" in js and "s16(" in js
+    assert 'word("C1")' in js
+    assert "===" in js
+
+
+NOTEQUAL_TEXT = """
+LDmicro export text
+for 'Microchip PIC16F877 40-PDIP', 8.000000 MHz crystal, 0.5 ms cycle time
+
+LADDER DIAGRAM:
+   ||      Y1                                                                                    ||
+ 1 ||-------[X1 /=]---[ 0 ]--------------------------------------------------------------------( )-------||
+   ||------[END]----------------------||
+
+I/O ASSIGNMENT:
+  Name                       | Type               | Pin
+ ----------------------------+--------------------+------
+  X1                         | Digital input      | 2
+  Y1                         | Digital output     | 21
+""".strip()
+
+
+def test_compare_not_equal_transpiles_strict_equality():
+    ladder = parse_ladder(NOTEQUAL_TEXT)
+    js = transpile_ladder(ladder).plc_cycle_js
+    assert "!==" in js
+    assert 'word("X1")' in js

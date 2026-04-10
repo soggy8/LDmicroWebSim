@@ -6,7 +6,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Any
 import json
 
-from .ladder_parser import parse_ladder, LadderProgram
+from .ladder_parser import parse_ladder, LadderProgram, Rung
 
 
 @dataclass
@@ -22,18 +22,20 @@ class IOPin:
 
 @dataclass
 class Timer:
-    """Represents a timer."""
+    """Timer metadata for the compiled program / status UI (from ladder export)."""
     name: str
-    delay_ms: int = 1000
-    timer_type: str = "TON"
+    delay_ms: int  # preset in ms from diagram
+    timer_type: str = "TON"  # TON, TOF, RTO
 
 
 @dataclass
 class Counter:
-    """Represents a counter."""
+    """Counter metadata for API/UI (matches ladder: CTU, CTD, CTUCOND, CTDCOND, CTC, RES)."""
     name: str
-    preset: int = 0
     counter_type: str = "CTU"
+    preset: int | None = None
+    min_value: int | None = None
+    max_value: int | None = None
 
 
 @dataclass
@@ -59,6 +61,119 @@ class SimulationProgram:
             "cycleTimeMs": self.cycle_time_ms,
             "useBoardLayout": self.use_board_layout,
         }
+
+
+def _iter_rungs_subtree(rung: Rung):
+    yield rung
+    for branch in rung.parallel_branches:
+        yield from _iter_rungs_subtree(branch)
+
+
+def _all_rungs(program: LadderProgram):
+    for top in program.rungs:
+        yield from _iter_rungs_subtree(top)
+
+
+def _timer_preset_ms_by_name(program: LadderProgram) -> dict[str, int]:
+    """Any explicit preset (ms) from [TON 500 ms] / [TOF 1 s] / [RTO …] anywhere in the diagram."""
+    out: dict[str, int] = {}
+    for rung in _all_rungs(program):
+        for t in rung.timers:
+            if t.delay is not None:
+                out[t.name] = int(t.delay)
+    return out
+
+
+def _resolve_timer_delay_ms(
+    t,
+    preset_by_name: dict[str, int],
+) -> int:
+    """Preset in ms for code generation; requires a value somewhere in the export."""
+    if t.delay is not None:
+        return int(t.delay)
+    if t.name in preset_by_name:
+        return preset_by_name[t.name]
+    raise ValueError(
+        f"Timer {t.name!r} has no preset time in the text export. "
+        "Add a duration on the diagram, e.g. [TON 500.0 ms], [TOF 1.0 s], or [RTO 250 ms]."
+    )
+
+
+def _collect_timers_for_ui(program: LadderProgram) -> list[Timer]:
+    """Ordered unique timers from ladder + I/O table for the status panel."""
+    preset_ms = _timer_preset_ms_by_name(program)
+    by_name: dict[str, Timer] = {}
+    order: list[str] = []
+    seen: set[str] = set()
+    for rung in _all_rungs(program):
+        for t in rung.timers:
+            if t.name in seen:
+                continue
+            seen.add(t.name)
+            raw = t.delay if t.delay is not None else preset_ms.get(t.name)
+            delay_ms = int(raw) if raw is not None else 0
+            by_name[t.name] = Timer(name=t.name, delay_ms=delay_ms, timer_type=t.timer_type)
+            order.append(t.name)
+    for io in program.io_assignments:
+        if "delay" not in io.io_type.lower():
+            continue
+        if io.name not in by_name:
+            dm = int(preset_ms.get(io.name, 0))
+            by_name[io.name] = Timer(name=io.name, delay_ms=dm, timer_type="TON")
+            order.append(io.name)
+    return [by_name[n] for n in order]
+
+
+def _collect_counters_for_ui(program: LadderProgram) -> list[Counter]:
+    """Ordered unique counters from ladder + I/O table for the status panel."""
+    by_name: dict[str, Counter] = {}
+    order: list[str] = []
+
+    def merge(name: str, c: Counter) -> None:
+        if name not in by_name:
+            by_name[name] = c
+            order.append(name)
+            return
+        old = by_name[name]
+        preset = old.preset
+        ctype = old.counter_type
+        lo, hi = old.min_value, old.max_value
+        if c.counter_type in ("CTUCOND", "CTDCOND") and c.preset is not None:
+            preset = int(c.preset)
+            ctype = c.counter_type
+        if c.counter_type == "CTC":
+            ctype = "CTC"
+            lo = c.min_value
+            hi = c.max_value
+        if c.counter_type == "RES":
+            ctype = old.counter_type
+        by_name[name] = Counter(
+            name=name,
+            preset=preset,
+            counter_type=ctype,
+            min_value=lo,
+            max_value=hi,
+        )
+
+    for rung in _all_rungs(program):
+        for c in rung.counters:
+            merge(
+                c.name,
+                Counter(
+                    name=c.name,
+                    preset=int(c.preset) if c.preset is not None else None,
+                    counter_type=c.counter_type,
+                    min_value=c.min_value,
+                    max_value=c.max_value,
+                ),
+            )
+    for io in program.io_assignments:
+        if "counter" not in io.io_type.lower():
+            continue
+        if io.name not in by_name:
+            by_name[io.name] = Counter(name=io.name, preset=None, counter_type="CTU")
+            order.append(io.name)
+    return [by_name[n] for n in order]
 
 
 # ============================================================================
@@ -89,6 +204,10 @@ BOARD_OUTPUTS = [
     {"name": "H3", "type": "light", "color": "red", "label": "Red Light"},
     {"name": "PANIC", "type": "strobe", "color": "red", "label": "Panic Strobe"},
     {"name": "BELL", "type": "buzzer", "color": "silver", "label": "Bell"},
+    {"name": "LOCK", "type": "lock", "color": "gray", "label": "Lock output"},
+    {"name": "K1", "type": "contactor", "color": "gray", "label": "Contactor K1"},
+    {"name": "K2", "type": "contactor", "color": "gray", "label": "Contactor K2"},
+    {"name": "K3", "type": "contactor", "color": "gray", "label": "Contactor K3"},
 ]
 
 # Name to index mappings
@@ -215,6 +334,10 @@ def transpile_ladder(ladder: LadderProgram) -> SimulationProgram:
     relay_names = [io.name for io in ladder.io_assignments if "relay" in io.io_type.lower()]
     timer_names = [io.name for io in ladder.io_assignments if "delay" in io.io_type.lower()]
     counter_names = [io.name for io in ladder.io_assignments if "counter" in io.io_type.lower()]
+    timer_names = sorted(
+        set(timer_names) | {t.name for rung in _all_rungs(ladder) for t in rung.timers}
+    )
+    timer_preset_ms = _timer_preset_ms_by_name(ladder)
 
     # Build the JavaScript code
     js_lines = ["function PlcCycle(state) {"]
@@ -242,6 +365,19 @@ def transpile_ladder(ladder: LadderProgram) -> SimulationProgram:
     js_lines.append("    if (outputMap[name] != null) state.outputs[outputMap[name]] = v ? 1 : 0;")
     js_lines.append("    else rt.relays[name] = v ? 1 : 0;")
     js_lines.append("  };")
+    js_lines.append(
+        "  const s16 = (n) => ((Math.trunc(Number(n)) & 0xffff) << 16) >> 16;"
+    )
+    js_lines.append("  const word = (name) => {")
+    js_lines.append("    if (inputMap[name] != null || outputMap[name] != null || rt.relays[name] != null)")
+    js_lines.append("      return s16(signal(name));")
+    js_lines.append("    if (counterNames.includes(name)) return s16(rt.counters[name] || 0);")
+    js_lines.append("    if (timerNames.includes(name)) {")
+    js_lines.append("      const t = rt.timers[name] || (rt.timers[name] = { acc: 0, out: 0 });")
+    js_lines.append("      return s16(t.acc || 0);")
+    js_lines.append("    }")
+    js_lines.append("    return s16(signal(name));")
+    js_lines.append("  };")
     js_lines.append("  const timerTon = (name, inp, delayMs) => {")
     js_lines.append("    const t = rt.timers[name] || (rt.timers[name] = { acc: 0, out: 0 });")
     js_lines.append("    if (inp) t.acc += cycleMs; else t.acc = 0;")
@@ -252,6 +388,15 @@ def transpile_ladder(ladder: LadderProgram) -> SimulationProgram:
     js_lines.append("    const t = rt.timers[name] || (rt.timers[name] = { acc: 0, out: 0 });")
     js_lines.append("    if (inp) { t.acc = delayMs; t.out = 1; }")
     js_lines.append("    else { t.acc = Math.max(0, t.acc - cycleMs); t.out = t.acc > 0 ? 1 : 0; }")
+    js_lines.append("    return t.out;")
+    js_lines.append("  };")
+    js_lines.append("  const timerRto = (name, inp, delayMs) => {")
+    js_lines.append("    const t = rt.timers[name] || (rt.timers[name] = { acc: 0, out: 0 });")
+    js_lines.append("    if (inp) {")
+    js_lines.append("      if (!t.out) t.acc += cycleMs;")
+    js_lines.append("    }")
+    js_lines.append("    if (t.acc >= delayMs) t.out = 1;")
+    js_lines.append("    if (!inp && t.out) { t.acc = 0; t.out = 0; }")
     js_lines.append("    return t.out;")
     js_lines.append("  };")
     js_lines.append("  const ctuCond = (name, inp, preset) => {")
@@ -286,9 +431,19 @@ def transpile_ladder(ladder: LadderProgram) -> SimulationProgram:
             js_lines.append("    let cond = 1;")
             for c in p.contacts:
                 if getattr(c, "kind", "contact") == "compare":
-                    op = c.operator or "=="
-                    val = c.value if c.value is not None else 0
-                    js_lines.append(f"    cond = cond && ((rt.counters[{json.dumps(c.name)}] || 0) {op} {int(val)});")
+                    op_raw = c.operator or "=="
+                    js_op = {"==": "===", "!=": "!=="}.get(op_raw, op_raw)
+                    if c.compare_lhs_const is not None:
+                        lhs_js = f"s16({int(c.compare_lhs_const)})"
+                    else:
+                        lhs_js = f"word({json.dumps(c.name)})"
+                    if c.compare_rhs_name is not None:
+                        rhs_js = f"word({json.dumps(c.compare_rhs_name)})"
+                    elif c.value is not None:
+                        rhs_js = f"s16({int(c.value)})"
+                    else:
+                        rhs_js = "s16(0)"
+                    js_lines.append(f"    cond = cond && ({lhs_js} {js_op} {rhs_js});")
                 else:
                     if c.normally_closed:
                         js_lines.append(f"    cond = cond && !signal({json.dumps(c.name)});")
@@ -296,13 +451,22 @@ def transpile_ladder(ladder: LadderProgram) -> SimulationProgram:
                         js_lines.append(f"    cond = cond && !!signal({json.dumps(c.name)});")
             for t in p.timers:
                 tname = json.dumps(t.name)
-                delay = int(t.delay)
+                delay = _resolve_timer_delay_ms(t, timer_preset_ms)
                 if t.timer_type == "TON":
                     js_lines.append(f"    cond = cond && timerTon({tname}, cond, {delay});")
                 elif t.timer_type == "TOF":
                     js_lines.append(f"    cond = cond && timerTof({tname}, cond, {delay});")
+                elif t.timer_type == "RTO":
+                    js_lines.append(f"    cond = cond && timerRto({tname}, cond, {delay});")
+                else:
+                    raise ValueError(f"Unknown timer type {t.timer_type!r} for timer {t.name!r}")
             for c in p.counters:
                 if c.counter_type in ("CTUCOND", "CTDCOND"):
+                    if c.preset is None:
+                        raise ValueError(
+                            f"Counter {c.name!r} ({c.counter_type}) has no preset in the export; "
+                            "use e.g. [CTU >=4]."
+                        )
                     js_lines.append(f"    cond = cond && ctuCond({json.dumps(c.name)}, cond, {int(c.preset)});")
             for c in p.counters:
                 name = json.dumps(c.name)
@@ -358,18 +522,9 @@ def transpile_ladder(ladder: LadderProgram) -> SimulationProgram:
         for i, out in enumerate(BOARD_OUTPUTS)
     ]
     
-    # Add timers and counters
-    program.timers = [
-        Timer(name="T0", delay_ms=1000),
-        Timer(name="T1", delay_ms=1000),
-        Timer(name="T2", delay_ms=1000),
-        Timer(name="T3", delay_ms=1000),
-    ]
-    program.counters = [
-        Counter(name="C0", preset=10),
-        Counter(name="C1", preset=10),
-    ]
-    
+    program.timers = _collect_timers_for_ui(ladder)
+    program.counters = _collect_counters_for_ui(ladder)
+
     return program
 
 
