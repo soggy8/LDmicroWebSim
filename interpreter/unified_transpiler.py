@@ -1,11 +1,5 @@
 """
-Unified Transpiler for LDmicro exports.
-
-Supports both:
-1. C code export
-2. Text ladder diagram export
-
-Auto-detects the format and uses the appropriate parser.
+Transpiler for LDmicro text exports.
 """
 
 from dataclasses import dataclass, field, asdict
@@ -13,7 +7,58 @@ from typing import Any
 import json
 
 from .ladder_parser import parse_ladder, LadderProgram
-from .transpiler import transpile as transpile_c, SimulationProgram, IOPin, Timer, Counter
+
+
+@dataclass
+class IOPin:
+    """Represents an I/O pin."""
+    name: str
+    index: int
+    pin_type: str  # 'input' or 'output'
+    label: str = ""
+    component_type: str = ""
+    color: str = ""
+
+
+@dataclass
+class Timer:
+    """Represents a timer."""
+    name: str
+    delay_ms: int = 1000
+    timer_type: str = "TON"
+
+
+@dataclass
+class Counter:
+    """Represents a counter."""
+    name: str
+    preset: int = 0
+    counter_type: str = "CTU"
+
+
+@dataclass
+class SimulationProgram:
+    """Simulation payload consumed by the frontend runtime."""
+    inputs: list[IOPin] = field(default_factory=list)
+    outputs: list[IOPin] = field(default_factory=list)
+    timers: list[Timer] = field(default_factory=list)
+    counters: list[Counter] = field(default_factory=list)
+    variables: list[dict[str, Any]] = field(default_factory=list)
+    plc_cycle_js: str = ""
+    cycle_time_ms: int = 10
+    use_board_layout: bool = True
+
+    def to_dict(self) -> dict:
+        return {
+            "inputs": [asdict(i) for i in self.inputs],
+            "outputs": [asdict(o) for o in self.outputs],
+            "timers": [asdict(t) for t in self.timers],
+            "counters": [asdict(c) for c in self.counters],
+            "variables": self.variables,
+            "plcCycleJs": self.plc_cycle_js,
+            "cycleTimeMs": self.cycle_time_ms,
+            "useBoardLayout": self.use_board_layout,
+        }
 
 
 # ============================================================================
@@ -106,43 +151,6 @@ def normalize_io_name(name: str, is_input: bool) -> str:
     if is_input:
         return INPUT_ALIASES.get(name, name)
     return OUTPUT_ALIASES.get(name, name)
-
-
-def detect_format(source: str) -> str:
-    """
-    Detect whether the source is C code or ladder diagram text.
-    
-    Returns: 'c' or 'ladder'
-    """
-    # Ladder diagram indicators
-    ladder_indicators = [
-        "LDmicro export text",
-        "LADDER DIAGRAM:",
-        "I/O ASSIGNMENT:",
-        "||-------",
-        "] [",
-        "]/[",
-        "( )",
-        "[END]",
-    ]
-    
-    # C code indicators
-    c_indicators = [
-        "void PlcCycle",
-        "void plc_cycle",
-        "#include",
-        "typedef",
-        "SWORD",
-        "int main",
-    ]
-    
-    source_lower = source.lower()
-    
-    # Count matches
-    ladder_score = sum(1 for ind in ladder_indicators if ind.lower() in source_lower or ind in source)
-    c_score = sum(1 for ind in c_indicators if ind.lower() in source_lower)
-    
-    return 'ladder' if ladder_score > c_score else 'c'
 
 
 def transpile_ladder(ladder: LadderProgram) -> SimulationProgram:
@@ -367,23 +375,12 @@ def transpile_ladder(ladder: LadderProgram) -> SimulationProgram:
 
 def transpile_unified(source: str) -> SimulationProgram:
     """
-    Auto-detect format and transpile to simulation program.
-    
-    Supports:
-    - C code exports from LDmicro
-    - Text ladder diagram exports from LDmicro
+    Transpile LDmicro text export to simulation program.
     """
-    format_type = detect_format(source)
-    
-    if format_type == 'ladder':
-        # Parse ladder diagram
-        ladder = parse_ladder(source)
-        return transpile_ladder(ladder)
-    else:
-        # Parse C code
-        return transpile_c(source, use_board_layout=True)
+    ladder = parse_ladder(source)
+    return transpile_ladder(ladder)
 
 
 # Export for use in server
-__all__ = ['transpile_unified', 'detect_format', 'SimulationProgram']
+__all__ = ['transpile_unified', 'transpile_ladder', 'SimulationProgram']
 

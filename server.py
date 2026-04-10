@@ -16,7 +16,6 @@ from pydantic import BaseModel
 
 from interpreter import (
     transpile_unified,
-    detect_format,
 )
 
 
@@ -82,16 +81,6 @@ async def compile_code(request: CompileRequest):
     Compile LDmicro text export to simulation-ready JSON.
     """
     try:
-        format_type = detect_format(request.source_code)
-        if format_type != "ladder":
-            return CompileResponse(
-                success=False,
-                message=(
-                    "Only LDmicro text export is supported. "
-                    "Use LDmicro 'Export As -> Text' and paste that content."
-                ),
-                simulation=None,
-            )
         program = transpile_unified(request.source_code)
 
         return CompileResponse(
@@ -125,19 +114,12 @@ async def upload_file(file: UploadFile = File(...)):
     try:
         content = await file.read()
         source_code = content.decode('utf-8')
-
-        format_type = detect_format(source_code)
-        if format_type != "ladder":
-            raise HTTPException(
-                status_code=400,
-                detail="Only LDmicro text export is supported",
-            )
         program = transpile_unified(source_code)
 
         return {
             "success": True,
             "filename": file.filename,
-            "format": format_type,
+            "format": "ladder",
             "message": "File uploaded and compiled successfully (text export)",
             "simulation": program.to_dict()
         }

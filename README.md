@@ -6,13 +6,13 @@
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
 </p>
 
-A web-based PLC ladder logic simulator that interprets [LDmicro](http://cq.cx/ladder.pl) exports (both C code and ladder text format) and runs them on a virtual training board with interactive inputs and outputs.
+A web-based PLC ladder logic simulator that interprets [LDmicro](http://cq.cx/ladder.pl) text exports and runs them on a virtual training board with interactive inputs and outputs.
 
 ![LDmicro Web Simulator](https://via.placeholder.com/800x400?text=LDmicro+Web+Simulator)
 
 ## ✨ Features
 
-- **Dual Format Support**: Import ladder logic from LDmicro's C code export or text ladder diagram export
+- **Text Export Focus**: Import ladder logic from LDmicro text ladder diagram export
 - **Interactive Virtual Board**: Simulates a physical PLC training board with:
   - 🔘 Sensors (light, proximity, motion, trigger, metal detectors)
   - 🔲 Toggle switches (S1, S2, S3)
@@ -64,9 +64,8 @@ Then open http://localhost:8000 in your browser.
 
 ### Step 1: Export from LDmicro
 
-In LDmicro, export your ladder diagram:
-- **C Code**: File → Compile As → C Code
-- **Text Format**: File → Export As → Text (recommended)
+In LDmicro, export your ladder diagram as text:
+- **Text Format**: File → Export As → Text
 
 ### Step 2: Load into Simulator
 
@@ -137,17 +136,14 @@ LDmicroWebSim/
 ├── server.py              # FastAPI backend server
 ├── interpreter/
 │   ├── __init__.py
-│   ├── lexer.py           # C code tokenizer
-│   ├── parser.py          # C code parser
-│   ├── transpiler.py      # C code to JS transpiler
 │   ├── ladder_parser.py   # Ladder text parser
-│   └── unified_transpiler.py  # Format auto-detection
+│   └── unified_transpiler.py  # Ladder text to JS transpiler
 ├── static/
 │   ├── index.html         # Main UI
 │   ├── styles.css         # Industrial theme CSS
 │   └── simulator.js       # Browser simulation engine
 ├── examples/
-│   └── simple_ladder.c    # Example C code
+│   └── simple_ladder.txt  # Example ladder text export
 ├── Dockerfile
 ├── docker-compose.yml
 └── requirements.txt
